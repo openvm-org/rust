@@ -17,7 +17,7 @@ pub trait EvalContextExt<'tcx>: crate::MiriInterpCxExt<'tcx> {
         // be kept in sync.
         let os = this.tcx.sess.target.os.as_ref();
         let max_fundamental_align = match this.tcx.sess.target.arch.as_ref() {
-            "riscv32" if matches!(os, "espidf" | "zkvm") => 4,
+            "riscv32" if matches!(os, "espidf" | "zkvm" | "openvm") => 4,
             "xtensa" if matches!(os, "espidf") => 4,
             "x86" | "arm" | "m68k" | "csky" | "loongarch32" | "mips" | "mips32r6" | "powerpc"
             | "powerpc64" | "sparc" | "wasm32" | "hexagon" | "riscv32" | "xtensa" => 8,
