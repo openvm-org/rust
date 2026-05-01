@@ -66,7 +66,16 @@ jobs:
           download-ci-llvm = false
           EOF
 
+      - name: Create target sanity check workaround
+        run: |
+          mkdir -p /tmp/rustc-targets
+          cat > /tmp/rustc-targets/riscv64im-unknown-openvm-elf.json << 'EOF'
+          {"arch": "riscv64", "os": "openvm", "llvm-target": "riscv64"}
+          EOF
+
       - name: Build toolchain
+        env:
+          RUST_TARGET_PATH: /tmp/rustc-targets
         run: |
           python3 x.py build --stage 2 compiler/rustc library \
             --target ${{ inputs.host-target }},riscv64im-unknown-openvm-elf
