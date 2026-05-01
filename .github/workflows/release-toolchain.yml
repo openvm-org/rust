@@ -1,0 +1,74 @@
+name: Release Toolchain
+
+on:
+  push:
+    tags:
+      - "openvm-[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name for release (e.g., openvm-2.1.0-rv64)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-x86_64-linux:
+    uses: ./.github/workflows/build-toolchain.yml
+    with:
+      runner: ubuntu-22.04
+      host-target: x86_64-unknown-linux-gnu
+
+  build-aarch64-darwin:
+    uses: ./.github/workflows/build-toolchain.yml
+    with:
+      runner: macos-14
+      host-target: aarch64-apple-darwin
+
+  build-x86_64-darwin:
+    uses: ./.github/workflows/build-toolchain.yml
+    with:
+      runner: macos-15
+      host-target: x86_64-apple-darwin
+
+  release:
+    name: Create Release
+    needs: [build-x86_64-linux, build-aarch64-darwin, build-x86_64-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: List artifacts
+        run: ls -R artifacts/
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir tars
+          find artifacts -name "*.tar.gz" -exec mv {} tars/ \;
+          if [ "$(ls -A tars)" ]; then
+            gh release create "${{ steps.tag.outputs.tag }}" \
+              --repo "${{ github.repository }}" \
+              --title "${{ steps.tag.outputs.tag }}" \
+              --notes "Pre-built Rust toolchain with riscv64im-unknown-openvm-elf target for OpenVM." \
+              --draft \
+              tars/*
+          else
+            echo "No artifacts found. Exiting."
+            exit 1
+          fi
