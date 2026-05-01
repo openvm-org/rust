@@ -6,23 +6,16 @@ on:
       runner:
         required: true
         type: string
-      host-target:
-        required: true
-        type: string
   workflow_dispatch:
     inputs:
       runner:
         required: true
         type: string
         default: "ubuntu-22.04"
-      host-target:
-        required: true
-        type: string
-        default: "x86_64-unknown-linux-gnu"
 
 jobs:
   build:
-    name: Build (${{ inputs.host-target }})
+    name: Build
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 180
     env:
@@ -34,6 +27,25 @@ jobs:
         with:
           submodules: "recursive"
           fetch-depth: 0
+
+      - name: Detect host triple
+        id: host
+        run: |
+          # Match rustc's host detection
+          ARCH=$(uname -m)
+          OS=$(uname -s)
+          case "$ARCH" in
+            x86_64)  ARCH_TRIPLE="x86_64" ;;
+            arm64|aarch64) ARCH_TRIPLE="aarch64" ;;
+            *) echo "Unsupported arch: $ARCH"; exit 1 ;;
+          esac
+          case "$OS" in
+            Linux)  HOST="${ARCH_TRIPLE}-unknown-linux-gnu" ;;
+            Darwin) HOST="${ARCH_TRIPLE}-apple-darwin" ;;
+            *) echo "Unsupported OS: $OS"; exit 1 ;;
+          esac
+          echo "triple=$HOST" >> "$GITHUB_OUTPUT"
+          echo "Detected host triple: $HOST"
 
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
@@ -78,18 +90,18 @@ jobs:
           RUST_TARGET_PATH: /tmp/rustc-targets
         run: |
           python3 x.py build --stage 2 compiler/rustc library \
-            --target ${{ inputs.host-target }},riscv64im-unknown-openvm-elf
+            --target ${{ steps.host.outputs.triple }},riscv64im-unknown-openvm-elf
 
       - name: Package toolchain
         run: |
-          cd build/${{ inputs.host-target }}/stage2
+          cd build/${{ steps.host.outputs.triple }}/stage2
           tar --exclude lib/rustlib/src \
               --exclude lib/rustlib/rustc-src \
-              -hczvf ../../../rust-toolchain-${{ inputs.host-target }}.tar.gz .
+              -hczvf ../../../rust-toolchain-${{ steps.host.outputs.triple }}.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rust-toolchain-${{ inputs.host-target }}
-          path: rust-toolchain-${{ inputs.host-target }}.tar.gz
+          name: rust-toolchain-${{ steps.host.outputs.triple }}
+          path: rust-toolchain-${{ steps.host.outputs.triple }}.tar.gz
           retention-days: 7

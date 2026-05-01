@@ -19,19 +19,16 @@ jobs:
     uses: ./.github/workflows/build-toolchain.yml
     with:
       runner: ubuntu-22.04
-      host-target: x86_64-unknown-linux-gnu
 
   build-aarch64-darwin:
     uses: ./.github/workflows/build-toolchain.yml
     with:
       runner: macos-14
-      host-target: aarch64-apple-darwin
 
   build-x86_64-darwin:
     uses: ./.github/workflows/build-toolchain.yml
     with:
-      runner: macos-15
-      host-target: x86_64-apple-darwin
+      runner: macos-13
 
   release:
     name: Create Release
