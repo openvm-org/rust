@@ -44,6 +44,10 @@ cfg_select! {
         mod xous;
         use xous as imp;
     }
+    target_os = "openvm" => {
+        mod openvm;
+        use openvm as imp;
+    }
     _ => {
         mod unsupported;
         use unsupported as imp;
