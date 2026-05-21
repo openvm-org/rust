@@ -7,6 +7,7 @@
     target_family = "windows",
     target_os = "hermit",
     target_os = "motor",
+    target_os = "openvm",
     target_os = "uefi",
     target_os = "wasi",
     target_os = "xous",
@@ -52,6 +53,10 @@ cfg_select! {
     target_os = "zkvm" => {
         mod zkvm;
         pub use zkvm::*;
+    }
+    target_os = "openvm" => {
+        mod openvm;
+        pub use openvm::*;
     }
     _ => {
         mod unsupported;
