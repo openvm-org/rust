@@ -44,6 +44,7 @@ cfg_select! {
         target_family = "wasm",
         target_os = "zkvm",
         target_os = "trusty",
+        target_os = "openvm",
     ) => {
         mod generic;
         pub use generic::*;

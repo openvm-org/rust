@@ -1,0 +1,92 @@
+name: Release Toolchain
+
+on:
+  push:
+    tags:
+      - "openvm-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name for release (e.g., openvm-2.1.0-rv64)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-x86_64-linux:
+    uses: ./.github/workflows/build-toolchain.yml
+    with:
+      runner: ubuntu-22.04
+
+  build-aarch64-linux:
+    uses: ./.github/workflows/build-toolchain.yml
+    with:
+      runner: ubuntu-22.04-arm
+
+  build-aarch64-darwin:
+    uses: ./.github/workflows/build-toolchain.yml
+    with:
+      runner: macos-14
+
+  release:
+    name: Create Release
+    needs: [build-x86_64-linux, build-aarch64-linux, build-aarch64-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          # The tag must already exist and point at the commit this workflow is running on.
+          # That keeps release provenance unambiguous (no implicit tag creation, no off-commit publish).
+          tag_commit=$(git rev-list -n 1 "refs/tags/$tag" 2>/dev/null || true)
+          if [ -z "$tag_commit" ]; then
+            echo "::error::tag '$tag' does not exist in the repository"
+            exit 1
+          fi
+          if [ "$tag_commit" != "$GITHUB_SHA" ]; then
+            echo "::error::tag '$tag' -> $tag_commit, workflow commit -> $GITHUB_SHA — refusing to release from a different commit"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect tarballs
+        run: |
+          mkdir tars
+          find artifacts -name "*.tar.gz" -exec mv {} tars/ \;
+          ls -la tars/
+          test "$(ls -A tars)" || (echo "::error::no tarballs produced"; exit 1)
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          # Rerun-safe: create-or-upload. If the release already exists (e.g. partial prior run),
+          # `gh release create` fails and we fall back to `upload --clobber` to refresh assets.
+          if ! gh release create "$TAG" \
+                --repo "${{ github.repository }}" \
+                --title "$TAG" \
+                --notes 'Pre-built Rust toolchain with `riscv64im-unknown-openvm-elf` target for OpenVM.' \
+                --draft \
+                tars/*; then
+            echo "Release already exists; uploading assets with --clobber"
+            gh release upload "$TAG" --repo "${{ github.repository }}" --clobber tars/*
+          fi
